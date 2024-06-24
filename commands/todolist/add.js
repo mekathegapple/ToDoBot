@@ -19,7 +19,7 @@ module.exports = {
         .setMinLength(1)
         .setRequired(true)
     ),
-  //TODO: Create a tagg option
+  //TODO: Create a tag option
   async execute(interaction) {
     const text = interaction.options.getString("text");
     const desc = interaction.options.getString("description");
