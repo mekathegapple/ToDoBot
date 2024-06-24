@@ -25,12 +25,13 @@ module.exports = {
       let count = 1;
       data.ToDos.forEach((element) => {
         let str =
+          "Goal #" +
           count.toString() +
-          " Title: " +
+          " - **Title:** " +
           element.Title +
-          " Description: " +
+          "| **Description:** " +
           element.Description +
-          " " +
+          "  " +
           (element.Status ? "✅" : "❌") +
           `\n`;
         response += str;
@@ -44,10 +45,15 @@ module.exports = {
       });
       const edit = new ButtonBuilder()
         .setCustomId("edit")
-        .setLabel("Edit A Goal")
+        .setLabel("Edit a Goal")
         .setStyle(ButtonStyle.Primary);
 
-      const row = new ActionRowBuilder().addComponents(edit);
+      const remove = new ButtonBuilder()
+        .setCustomId("remove")
+        .setLabel("Remove a Goal")
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents([edit, remove]);
 
       const reply = await interaction.reply({
         content: response,
@@ -117,7 +123,6 @@ module.exports = {
                   result.deferReply();
                   const newTitle = result.fields.getTextInputValue("todotitle");
                   const newDesc = result.fields.getTextInputValue("tododesc");
-
                   goal.Title = newTitle;
                   goal.Description = newDesc;
                   data.save();
@@ -131,6 +136,64 @@ module.exports = {
                 .catch((err) => {
                   console.error(err);
                 });
+            }
+          });
+        }
+        if (i.customId == "remove") {
+          const list = new StringSelectMenuBuilder()
+            .setCustomId("todolistmenu")
+            .setPlaceholder("Pick a Goal")
+            .addOptions(options);
+
+          const listRow = new ActionRowBuilder().addComponents(list);
+
+          const update = await i.update({
+            //TODO: Add a return button maybe
+            content: response,
+            ephemeral: true,
+            components: [listRow],
+          });
+
+          const listCollector = update.createMessageComponentCollector({
+            componentType: ComponentType.StringSelect,
+            time: 90_000,
+          });
+
+          listCollector.on("collect", async (j) => {
+            if (j.customId == "todolistmenu") {
+              let goal = data.ToDos.id(j.values[0]);
+
+              const yesButton = new ButtonBuilder()
+                .setCustomId("yes")
+                .setLabel("Yes!")
+                .setStyle(ButtonStyle.Danger);
+
+              const noButton = new ButtonBuilder()
+                .setCustomId("no")
+                .setLabel("No!")
+                .setStyle(ButtonStyle.Secondary);
+
+              const buttonRow = new ActionRowBuilder().addComponents([
+                yesButton,
+                noButton
+              ]);
+              const update = await j.update({content: `Confirm that you want to remove ${goal.Title} goal from your list.`, ephemeral: true, components: [buttonRow]});
+
+              const confirmCollector = update.createMessageComponentCollector({
+                componentType: ComponentType.Button,
+                time: 90_000
+              })
+
+              confirmCollector.on("collect", async (k) => {
+                if(k.customId = "yes") {
+                  goal.deleteOne();
+                  data.save();
+                  k.update({content: "done", ephemeral: true, components: []});
+                }
+                else if(k.customId = "no") {
+                  k.update({content: "not done", ephemeral: true, components: []});
+                }
+              });
             }
           });
         }
