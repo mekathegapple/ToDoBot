@@ -7,8 +7,8 @@ module.exports = {
     .setDescription("ey")
     .addStringOption((option) =>
       option
-        .setName("text")
-        .setDescription("Pick a text for your goal.")
+        .setName("title")
+        .setDescription("Pick a title for your goal.")
         .setMinLength(1)
         .setRequired(true)
     )
@@ -21,14 +21,14 @@ module.exports = {
     ),
   //TODO: Create a tag option
   async execute(interaction) {
-    const text = interaction.options.getString("text");
+    const title = interaction.options.getString("title");
     const desc = interaction.options.getString("description");
 
 
     let data = await UserListData.findOne({ UserID: interaction.user.id });
     if (data) {
       data.ToDos.push({
-        Title: text,
+        Title: title,
         Description: desc,
         Status: false,
       });
@@ -38,7 +38,7 @@ module.exports = {
       const userList = new UserListData({
         UserID: interaction.user.id,
         ToDos : [{
-          Title: text,
+          Title: title,
           Description: desc,
           Status: false,
         }]

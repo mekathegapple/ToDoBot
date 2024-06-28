@@ -9,7 +9,7 @@ const {
   StringSelectMenuOptionBuilder,
   TextInputStyle,
   TextInputBuilder,
-  time,
+  EmbedBuilder,
 } = require("discord.js");
 const UserListData = require("../../models/UserListData");
 
@@ -20,21 +20,21 @@ module.exports = {
   async execute(interaction) {
     let data = await UserListData.findOne({ UserID: interaction.user.id });
     if (data) {
+      let embed = new EmbedBuilder()
+        .setColor("#30D5C8")
+        .setTitle("Your To Do List")
+        .setTimestamp()
+        .setFooter({ text: "Made with ❤️ by The Gapple" });
+
       let options = [];
-      let response = "";
       let count = 1;
       data.ToDos.forEach((element) => {
-        let str =
-          "Goal #" +
-          count.toString() +
-          " - **Title:** " +
-          element.Title +
-          "| **Description:** " +
-          element.Description +
-          "  " +
-          (element.Status ? "✅" : "❌") +
-          `\n`;
-        response += str;
+        embed.addFields({
+          name: `${count.toString()}-${element.Title}    ${
+            element.Status ? "✅" : "❌"
+          }`,
+          value: element.Description + `\n`,
+        });
         options.push(
           new StringSelectMenuOptionBuilder()
             .setLabel(count + " - " + element.Title)
@@ -43,54 +43,98 @@ module.exports = {
         );
         count++;
       });
-      const edit = new ButtonBuilder()
-        .setCustomId("edit")
-        .setLabel("Edit a Goal")
-        .setStyle(ButtonStyle.Primary);
 
-      const remove = new ButtonBuilder()
-        .setCustomId("remove")
-        .setLabel("Remove a Goal")
-        .setStyle(ButtonStyle.Danger);
+      const list = new StringSelectMenuBuilder()
+        .setCustomId("todolistmenu")
+        .setPlaceholder("Pick a Goal")
+        .addOptions(options);
 
-      const row = new ActionRowBuilder().addComponents([edit, remove]);
+      const listRow = new ActionRowBuilder().addComponents(list);
 
       const reply = await interaction.reply({
-        content: response,
+        content: " ",
+        embeds: [embed],
         ephemeral: true,
-        components: [row],
+        components: [listRow],
       });
 
-      const buttonCollector = reply.createMessageComponentCollector({
-        componentType: ComponentType.Button,
+      const listCollector = reply.createMessageComponentCollector({
+        componentType: ComponentType.StringSelect,
         time: 900_000,
       });
 
-      buttonCollector.on("collect", async (i) => {
-        if (i.customId == "edit") {
-          const list = new StringSelectMenuBuilder()
-            .setCustomId("todolistmenu")
-            .setPlaceholder("Pick a Goal")
-            .addOptions(options);
+      listCollector.on("collect", async (i) => {
+        if (i.customId == "todolistmenu") {
+          const goal = data.ToDos.id(i.values[0]);
+          const index = data.ToDos.indexOf(goal) + 1;
 
-          const listRow = new ActionRowBuilder().addComponents(list);
+          const embed = new EmbedBuilder()
+            .setTitle(`${index}-${goal.Title}`)
+            .setDescription(
+              goal.Description + `\n\nStatus: ${goal.Status ? "✅" : "❌"}`
+            )
+            .addFields({
+              name: "Time of Creation: ",
+              value: "wip",
+              inline: true,
+            })
+            .setColor("#30D5C8")
+            .setTimestamp()
+            .setFooter({ text: "Made with ❤️ by The Gapple" });
 
-          const update = await i.update({
-            //TODO: Add a return button maybe
-            content: response,
+          const complete = new ButtonBuilder()
+            .setCustomId("complete")
+            .setLabel("Complete")
+            .setStyle(ButtonStyle.Success);
+
+          const edit = new ButtonBuilder()
+            .setCustomId("edit")
+            .setLabel("Edit")
+            .setStyle(ButtonStyle.Primary);
+
+          const remove = new ButtonBuilder()
+            .setCustomId("remove")
+            .setLabel("Remove")
+            .setStyle(ButtonStyle.Danger);
+
+          const buttonRow = new ActionRowBuilder().addComponents([
+            complete,
+            edit,
+            remove,
+          ]);
+          const buttonReply = await i.reply({
+            content: " ",
+            embeds: [embed],
+            components: [buttonRow],
             ephemeral: true,
-            components: [listRow],
           });
 
-          const listCollector = update.createMessageComponentCollector({
-            componentType: ComponentType.StringSelect,
-            time: 90_000,
+          const buttonCollector = reply.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 60000,
           });
+          buttonCollector.on("collect", async (j) => {
+            if (j.customId == "complete") {
+              goal.Status = true;
+              data.save();
 
-          listCollector.on("collect", async (j) => {
-            if (j.customId == "todolistmenu") {
-              let goal = data.ToDos.id(j.values[0]);
-
+              const editedEmbed = new EmbedBuilder()
+              .setTitle(`${index}-${goal.Title}`)
+              .setDescription(
+                goal.Description + `\n\nStatus: ${goal.Status ? "✅" : "❌"}`
+              )
+              .addFields({
+                name: "Time of Creation: ",
+                value: "wip",
+                inline: true,
+              })
+              .setColor("#30D5C8")
+              .setTimestamp()
+              .setFooter({ text: "Made with ❤️ by The Gapple" });
+              await i.editReply({embeds: [editedEmbed]})
+              return j.reply("You've completed this goal. Congrats!")
+            }
+            if (j.customId == "edit") {
               const modal = new ModalBuilder()
                 .setCustomId("todoModal")
                 .setTitle("Edit a Goal");
@@ -127,9 +171,10 @@ module.exports = {
                   goal.Description = newDesc;
                   data.save();
                   result.deleteReply();
-                  i.editReply({
+                  j.editReply({
                     content: "Successfully edited the goal.",
                     ephemeral: true,
+                    embeds: [],
                     components: [],
                   });
                 })
@@ -137,32 +182,7 @@ module.exports = {
                   console.error(err);
                 });
             }
-          });
-        }
-        if (i.customId == "remove") {
-          const list = new StringSelectMenuBuilder()
-            .setCustomId("todolistmenu")
-            .setPlaceholder("Pick a Goal")
-            .addOptions(options);
-
-          const listRow = new ActionRowBuilder().addComponents(list);
-
-          const update = await i.update({
-            //TODO: Add a return button maybe
-            content: response,
-            ephemeral: true,
-            components: [listRow],
-          });
-
-          const listCollector = update.createMessageComponentCollector({
-            componentType: ComponentType.StringSelect,
-            time: 90_000,
-          });
-
-          listCollector.on("collect", async (j) => {
-            if (j.customId == "todolistmenu") {
-              let goal = data.ToDos.id(j.values[0]);
-
+            if (j.customId == "remove") {
               const yesButton = new ButtonBuilder()
                 .setCustomId("yes")
                 .setLabel("Yes!")
@@ -175,23 +195,36 @@ module.exports = {
 
               const buttonRow = new ActionRowBuilder().addComponents([
                 yesButton,
-                noButton
+                noButton,
               ]);
-              const update = await j.update({content: `Confirm that you want to remove ${goal.Title} goal from your list.`, ephemeral: true, components: [buttonRow]});
+              const update = await j.update({
+                content: `Confirm that you want to remove this goal from your list.`,
+                ephemeral: true,
+                components: [buttonRow],
+              });
 
               const confirmCollector = update.createMessageComponentCollector({
                 componentType: ComponentType.Button,
-                time: 90_000
-              })
+                time: 90_000,
+              });
 
               confirmCollector.on("collect", async (k) => {
-                if(k.customId = "yes") {
+                if ((k.customId = "yes")) {
                   goal.deleteOne();
                   data.save();
-                  k.update({content: "done", ephemeral: true, components: []});
-                }
-                else if(k.customId = "no") {
-                  k.update({content: "not done", ephemeral: true, components: []});
+                  k.update({
+                    content: "done",
+                    ephemeral: true,
+                    components: [],
+                    embeds: [],
+                  });
+                } else if ((k.customId = "no")) {
+                  k.update({
+                    content: "not done",
+                    ephemeral: true,
+                    components: [],
+                    embeds: [],
+                  });
                 }
               });
             }
